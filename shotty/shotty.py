@@ -1,5 +1,6 @@
 import boto3
 import click
+import botocore
 
 session = boto3.Session(profile_name='shotty')
 ec2 = session.resource('ec2')
@@ -70,10 +71,19 @@ def instances():
 @click.option('--project', default=None, help='Only instances for project (tag Project:<name>)')
 def create_snapshorts(project):
     "Create snapshots for EC2 instances"
+
     for i in filter_instances(project):
+        print('Stopping {0}'.format(i.id))
+        i.stop()
+        i.wait_until_stopped()
+
         for v in i.volumes.all():
-            print('Creating snapshot of {0} ...'.format(v.id))
+            print('  Creating snapshot of {0} ...'.format(v.id))
             v.create_snapshot(Description='Created by SnapshotAlizer 30000')
+
+        print('Starting {0}'.format(i.id))
+        i.start()
+        i.wait_until_running()
     return
 
 @instances.command('list')
@@ -97,7 +107,12 @@ def stop_instances(project):
     "Stop EC2 instances"
     for i in filter_instances(project):
         print('Stopping {0} ...'.format(i.id))
-        i.stop()
+        try:
+            i.stop()
+        except botocore.exceptions.ClientError as e:
+            print('  Cloud not stop {0} '.format(i.id) + str(e))
+            continue
+
     return
 
 @instances.command('start')
@@ -106,7 +121,12 @@ def start_instances(project):
     "Start EC2 instances"
     for i in filter_instances(project):
         print('Starting {0} ...'.format(i.id))
-        i.start()
+        try:
+            i.start()
+        except botocore.exceptions.ClientError as e:
+            print('  Cloud not start {0} '.format(i.id) + str(e))
+            continue
+
     return
 
 
